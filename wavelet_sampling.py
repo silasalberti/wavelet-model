@@ -1,68 +1,65 @@
 import streamlit as st
-import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import einops as eo
 
 
 def constant(j: int):
-    return torch.ones(2 ** j, 2 ** j)
+    return np.ones((2 ** j, 2 ** j))
 
 
 def horizontal(j: int):
-    return torch.cat(
-        (torch.ones(2 ** j, 2 ** (j - 1)), -torch.ones(2 ** j, 2 ** (j - 1))), dim=1
+    return np.concatenate(
+        (np.ones((2 ** j, 2 ** (j - 1))), -np.ones((2 ** j, 2 ** (j - 1)))), axis=1
     )
 
 
 def vertical(j: int):
-    return torch.cat(
-        (torch.ones(2 ** (j - 1), 2 ** j), -torch.ones(2 ** (j - 1), 2 ** j)), dim=0
+    return np.concatenate(
+        (np.ones((2 ** (j - 1), 2 ** j)), -np.ones((2 ** (j - 1), 2 ** j))), axis=0
     )
 
 
 def checker(j: int):
-    return torch.cat(
+    return np.concatenate(
         (
-            torch.cat(
+            np.concatenate(
                 (
-                    torch.ones(2 ** (j - 1), 2 ** (j - 1)),
-                    -torch.ones(2 ** (j - 1), 2 ** (j - 1)),
+                    np.ones((2 ** (j - 1), 2 ** (j - 1))),
+                    -np.ones((2 ** (j - 1), 2 ** (j - 1))),
                 ),
-                dim=0,
+                axis=0,
             ),
-            torch.cat(
+            np.concatenate(
                 (
-                    -torch.ones(2 ** (j - 1), 2 ** (j - 1)),
-                    torch.ones(2 ** (j - 1), 2 ** (j - 1)),
+                    -np.ones((2 ** (j - 1), 2 ** (j - 1))),
+                    np.ones((2 ** (j - 1), 2 ** (j - 1))),
                 ),
-                dim=0,
+                axis=0,
             ),
         ),
-        dim=1,
+        axis=1,
     )
 
 
 def haar2d_unnormalized(j: int, top_level: bool = True):
     if top_level:
-        result = torch.stack(
-            (constant(j), horizontal(j), vertical(j), checker(j)), dim=0
-        )
-        freq = torch.zeros(4)
+        result = np.stack((constant(j), horizontal(j), vertical(j), checker(j)), axis=0)
+        freq = np.zeros(4)
     else:
-        result = torch.stack((horizontal(j), vertical(j), checker(j)), dim=0)
-        freq = torch.zeros(3)
+        result = np.stack((horizontal(j), vertical(j), checker(j)), axis=0)
+        freq = np.zeros(3)
     if j > 1:
         sub, subfreq = haar2d_unnormalized(j - 1, top_level=False)
         size = sub.shape[0]
-        zeros = torch.zeros(size * 4, 2 ** j, 2 ** j)
+        zeros = np.zeros((size * 4, 2 ** j, 2 ** j))
         zeros[:size, : 2 ** (j - 1), : 2 ** (j - 1)] = sub
         zeros[size : 2 * size, 2 ** (j - 1) :, : 2 ** (j - 1)] = sub
         zeros[2 * size : 3 * size, : 2 ** (j - 1), 2 ** (j - 1) :] = sub
         zeros[3 * size :, 2 ** (j - 1) :, 2 ** (j - 1) :] = sub
-        result = torch.cat((result, zeros), dim=0)
-        freq = torch.cat(
-            (freq, subfreq + 1, subfreq + 1, subfreq + 1, subfreq + 1), dim=0
+        result = np.concatenate((result, zeros), axis=0)
+        freq = np.concatenate(
+            (freq, subfreq + 1, subfreq + 1, subfreq + 1, subfreq + 1), axis=0
         )
     return result, freq
 
@@ -70,7 +67,7 @@ def haar2d_unnormalized(j: int, top_level: bool = True):
 def haar2d(j: int):
     H_unnormalized, freq = haar2d_unnormalized(j)
     M_unnormalized = H_unnormalized.reshape(2 ** j * 2 ** j, 2 ** j * 2 ** j)
-    M = M_unnormalized / torch.unsqueeze(torch.norm(M_unnormalized, dim=1), dim=1)
+    M = M_unnormalized / np.expand_dims(np.linalg.norm(M_unnormalized, axis=1), axis=1)
     H = M.reshape(2 ** j * 2 ** j, 2 ** j, 2 ** j)
     return H, freq
 
@@ -78,13 +75,13 @@ def haar2d(j: int):
 def sample_image(j: int, decay: float):
     n = 2 ** j
     N = n * n
-    z1 = torch.randn(N) / decay ** freq
-    z2 = torch.randn(N) / decay ** freq
-    z3 = torch.randn(N) / decay ** freq
-    I1 = torch.einsum("abc,a->bc", H, z1)
-    I2 = torch.einsum("abc,a->bc", H, z2)
-    I3 = torch.einsum("abc,a->bc", H, z3)
-    I = torch.stack((I1, I2, I3), dim=0)
+    z1 = np.random.randn(N) / decay ** freq
+    z2 = np.random.randn(N) / decay ** freq
+    z3 = np.random.randn(N) / decay ** freq
+    I1 = np.einsum("abc,a->bc", H, z1)
+    I2 = np.einsum("abc,a->bc", H, z2)
+    I3 = np.einsum("abc,a->bc", H, z3)
+    I = np.stack((I1, I2, I3), axis=0)
     return I
 
 
@@ -92,7 +89,6 @@ def show_image(I):
     # Preprocess image
     I = (I - I.min()) / (I.max() - I.min())
     I = eo.rearrange(I, "c w h -> w h c")
-    I = I.numpy()
     # Visualize
     fig, ax = plt.subplots()
     ax.imshow(I)
